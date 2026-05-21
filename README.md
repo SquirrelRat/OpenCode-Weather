@@ -2,6 +2,8 @@
 
 Weather widget plugin for [OpenCode](https://github.com/opencode-ai/opencode) TUI. Shows current conditions in the `app_bottom` bar using the [Open-Meteo](https://open-meteo.com/) API — free, no API key required.
 
+<img width="705" height="32" alt="image" src="https://github.com/user-attachments/assets/627e95de-29a4-4ca7-8975-de0f77080454" />
+
 ## Features
 
 - Worldwide location search (city, zip, address)
