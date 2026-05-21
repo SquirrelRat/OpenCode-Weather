@@ -1,6 +1,6 @@
 # opencode-weather
 
-Weather widget plugin for [OpenCode](https://github.com/opencode-ai/opencode) TUI. Displays current conditions in the `app_bottom` bar using the [Open-Meteo](https://open-meteo.com/) API — free, no API key required.
+Weather widget plugin for [OpenCode](https://github.com/opencode-ai/opencode) TUI. Shows current conditions in the `app_bottom` bar using the [Open-Meteo](https://open-meteo.com/) API — free, no API key required.
 
 ## Features
 
