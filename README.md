@@ -20,7 +20,7 @@ Add to your OpenCode plugin config:
 
 ```json
 {
-  "plugin": ["opencode-weather@latest"]
+  "plugin": ["github:squirrelrat/opencode-weather"]
 }
 ```
 
@@ -81,11 +81,11 @@ bun run typecheck
 
 No build step — OpenCode loads TSX directly via the plugin exports (`"exports": { "./tui": "./src/index.tsx" }`).
 
-For local development, point the plugin config at the project directory:
+For local development, use a local path reference:
 
 ```json
 {
-  "plugin": ["E:/CodeProjects/OpenCode-Weather"]
+  "plugin": ["/path/to/OpenCode-Weather"]
 }
 ```
 
