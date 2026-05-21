@@ -1,0 +1,26 @@
+{
+  "name": "opencode-weather",
+  "version": "1.0.0",
+  "description": "Weather widget for OpenCode TUI - shows current conditions in the app_bottom bar",
+  "type": "module",
+  "exports": {
+    "./tui": "./src/index.tsx"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": ">=1.14.48",
+    "@opencode-ai/sdk": ">=1.14.48",
+    "@opentui/core": "^0.2.6",
+    "@opentui/keymap": "^0.2.6",
+    "@opentui/solid": "^0.2.6",
+    "solid-js": "^1.9.12"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
