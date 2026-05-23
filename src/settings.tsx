@@ -1,6 +1,5 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
-
 import { searchLocation } from "./geocode.js"
 import type { GeocodingResult, Alignment, TempUnit, WindUnit, WeatherField } from "./config.js"
 import { DEFAULT_ALIGNMENT, DEFAULT_INTERVAL, DEFAULT_FIELDS, DEFAULT_SHOW_HINT, DEFAULT_SHOW_ICONS, DEFAULT_SHOW_LOCATION, DEFAULT_LOCATION_COLOR, FIELD_LABELS, LOCATION_COLOR_OPTIONS } from "./config.js"
@@ -15,8 +14,6 @@ function refresh(api: TuiPluginApi) {
 function configReload(api: TuiPluginApi) {
   api.keymap.dispatchCommand("weather.config_reload")
 }
-
-// ─── Location picker ───────────────────────────────────────────────
 
 export function showLocationPicker(api: TuiPluginApi) {
   api.ui.dialog.replace(
@@ -84,8 +81,6 @@ export function showLocationPicker(api: TuiPluginApi) {
   )
 }
 
-// ─── Field toggler ─────────────────────────────────────────────────
-
 function showFieldPicker(api: TuiPluginApi) {
   const fieldLabels = FIELD_LABELS
   const allFields: WeatherField[] = ["temp", "cloud", "wind", "humidity", "feels_like", "precip", "pressure", "wind_gust", "wind_dir", "uv_index", "condition", "rain_chance"]
@@ -104,7 +99,7 @@ function showFieldPicker(api: TuiPluginApi) {
               : [...current, f]
             api.kv.set("weather_fields", updated)
             configReload(api)
-            showFieldPicker(api) // re-open with updated state
+            showFieldPicker(api)
           },
         })),
         {
@@ -116,8 +111,6 @@ function showFieldPicker(api: TuiPluginApi) {
     />
   ))
 }
-
-// ─── Single-option picker helper ──────────────────────────────────
 
 function showOptionPicker<T extends string>(
   api: TuiPluginApi,
@@ -152,8 +145,6 @@ function showOptionPicker<T extends string>(
   ))
 }
 
-// ─── Interval picker ──────────────────────────────────────────────
-
 function showIntervalPicker(api: TuiPluginApi) {
   const current = api.kv.get<number>("weather_interval", DEFAULT_INTERVAL)
   api.ui.dialog.replace(
@@ -167,6 +158,7 @@ function showIntervalPicker(api: TuiPluginApi) {
           const n = parseInt(value, 10)
           if (isNaN(n) || n < 1) return
           api.kv.set("weather_interval", n)
+          configReload(api)
           refresh(api)
           showWeatherSettings(api)
         }}
@@ -175,8 +167,6 @@ function showIntervalPicker(api: TuiPluginApi) {
     () => {},
   )
 }
-
-// ─── Boolean toggle helper ────────────────────────────────────────
 
 function showBooleanToggle(api: TuiPluginApi, title: string, kvKey: string, defaultVal: boolean, onBack: () => void, configOnly?: boolean) {
   const current = api.kv.get<boolean>(kvKey, defaultVal)
@@ -213,8 +203,6 @@ function showBooleanToggle(api: TuiPluginApi, title: string, kvKey: string, defa
     />
   ))
 }
-
-// ─── Main settings menu ───────────────────────────────────────────
 
 export function showWeatherSettings(api: TuiPluginApi) {
   const city = api.kv.get<string>("weather_city")
@@ -304,7 +292,6 @@ export function showWeatherSettings(api: TuiPluginApi) {
           title: "Reset to defaults",
           value: "reset",
           onSelect: () => {
-            // Preserve location, reset everything else
             const keys = [
               "weather_temp_unit", "weather_wind_unit", "weather_interval",
               "weather_alignment", "weather_fields", "weather_show_hint",

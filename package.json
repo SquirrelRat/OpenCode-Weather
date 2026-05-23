@@ -1,6 +1,6 @@
 {
   "name": "opencode-weather",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Weather widget for OpenCode TUI - shows current conditions in the app_bottom bar",
   "type": "module",
   "exports": {

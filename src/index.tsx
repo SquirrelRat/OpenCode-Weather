@@ -1,15 +1,11 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui"
-import { createSignal } from "solid-js"
-import { WeatherWidget } from "./display.js"
+import { WeatherWidget, requestWeatherRefresh, requestWeatherConfigReload } from "./display.js"
 import { showWeatherSettings, showLocationPicker } from "./settings.js"
 
 const PLUGIN_ID = "opencode-weather"
 
 const tui: TuiPlugin = async (api) => {
-  const [refreshVersion, setRefreshVersion] = createSignal(0)
-  const [configVersion, setConfigVersion] = createSignal(0)
-
   api.keymap.registerLayer({
     commands: [
       {
@@ -37,7 +33,7 @@ const tui: TuiPlugin = async (api) => {
         description: "Force weather data refresh now",
         category: "Weather",
         slashName: "weather-refresh",
-        run: () => setRefreshVersion((v) => v + 1),
+        run: () => requestWeatherRefresh(api),
       },
       {
         namespace: "palette",
@@ -46,7 +42,7 @@ const tui: TuiPlugin = async (api) => {
         description: "Reload display settings without re-fetching weather data",
         category: "Weather",
         slashName: "weather-config",
-        run: () => setConfigVersion((v) => v + 1),
+        run: () => requestWeatherConfigReload(api),
       },
     ],
     bindings: [
@@ -58,7 +54,7 @@ const tui: TuiPlugin = async (api) => {
     order: 500,
     slots: {
       app_bottom() {
-        return <WeatherWidget api={api} refreshVersion={refreshVersion} configVersion={configVersion} />
+        return <WeatherWidget api={api} />
       },
     },
   })

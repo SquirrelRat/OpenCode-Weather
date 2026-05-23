@@ -86,19 +86,19 @@ export function isImperialCountry(code: string): boolean {
 }
 
 export function weatherEmoji(code: number): string {
-  if (code >= 95) return "⛈"       // Thunderstorm
-  if (code >= 85) return "🌨"       // Snow showers
-  if (code >= 80) return "🌦"       // Rain showers
-  if (code >= 71) return "🌨"       // Snowfall
-  if (code >= 66) return "🌧"       // Freezing rain
-  if (code >= 61) return "🌧"       // Rain
-  if (code >= 56) return "🌧"       // Freezing drizzle
-  if (code >= 51) return "🌦"       // Drizzle
-  if (code >= 45) return "🌫"       // Foggy
-  if (code >= 3)  return "☁"        // Overcast
-  if (code >= 2)  return "⛅"        // Partly cloudy
-  if (code >= 1)  return "🌤"        // Mainly clear
-  return "☀"                          // Clear sky
+  if (code >= 95) return "⛈"
+  if (code >= 85) return "🌨"
+  if (code >= 80) return "🌦"
+  if (code >= 71) return "🌨"
+  if (code >= 66) return "🌧"
+  if (code >= 61) return "🌧"
+  if (code >= 56) return "🌧"
+  if (code >= 51) return "🌦"
+  if (code >= 45) return "🌫"
+  if (code >= 3)  return "☁"
+  if (code >= 2)  return "⛅"
+  if (code >= 1)  return "🌤"
+  return "☀"
 }
 
 export function weatherDescription(code: number): string {
