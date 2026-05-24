@@ -7,6 +7,7 @@ export async function fetchWeather(
   lon: number,
   tempUnit: TempUnit,
   windUnit: WindUnit,
+  signal?: AbortSignal,
 ): Promise<WeatherData> {
   const url = new URL(WEATHER_URL)
   url.searchParams.set("latitude", lat.toString())
@@ -17,7 +18,9 @@ export async function fetchWeather(
   url.searchParams.set("temperature_unit", tempUnit === "F" ? "fahrenheit" : "celsius")
   url.searchParams.set("wind_speed_unit", windUnit === "mph" ? "mph" : "kmh")
 
-  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10_000) })
+  const res = await fetch(url.toString(), {   signal: signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
+    : AbortSignal.timeout(10_000) })
   if (!res.ok) throw new Error(`Weather API returned ${res.status}`)
 
   const body = await res.json()
@@ -41,12 +44,12 @@ export async function fetchWeather(
     windSpeed: current.wind_speed_10m,
     humidity: current.relative_humidity_2m,
     weatherCode: current.weather_code,
-    feelsLike: current.apparent_temperature !== undefined ? Math.round(current.apparent_temperature) : undefined,
-    precipitation: current.precipitation,
-    pressure: current.pressure_msl !== undefined ? Math.round(current.pressure_msl) : undefined,
-    windGust: current.wind_gusts_10m !== undefined ? Math.round(current.wind_gusts_10m) : undefined,
-    windDirection: current.wind_direction_10m !== undefined ? Math.round(current.wind_direction_10m) : undefined,
-    uvIndex: current.uv_index !== undefined ? Math.round(current.uv_index * 10) / 10 : undefined,
-    rainChance: body.daily?.precipitation_probability_max?.[0],
+    feelsLike: current.apparent_temperature != null ? Math.round(current.apparent_temperature) : undefined,
+    precipitation: current.precipitation ?? undefined,
+    pressure: current.pressure_msl != null ? Math.round(current.pressure_msl) : undefined,
+    windGust: current.wind_gusts_10m != null ? Math.round(current.wind_gusts_10m) : undefined,
+    windDirection: current.wind_direction_10m != null ? Math.round(current.wind_direction_10m) : undefined,
+    uvIndex: current.uv_index != null ? Math.round(current.uv_index * 10) / 10 : undefined,
+    rainChance: body.daily?.precipitation_probability_max?.[0] ?? undefined,
   }
 }

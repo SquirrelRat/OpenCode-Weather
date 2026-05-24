@@ -18,6 +18,8 @@ export type WindUnit = "km/h" | "mph"
 export type Alignment = "left" | "center" | "right"
 export type WeatherField = "temp" | "cloud" | "wind" | "humidity" | "feels_like" | "precip" | "pressure" | "wind_gust" | "wind_dir" | "uv_index" | "condition" | "rain_chance"
 
+export type LocationColor = "accent" | "info" | "warning" | "success" | "error" | "text" | "textMuted"
+
 export type WeatherConfig = {
   lat: number | undefined
   lon: number | undefined
@@ -30,7 +32,7 @@ export type WeatherConfig = {
   showHint: boolean
   showIcons: boolean
   showLocation: boolean
-  locationColor: string
+  locationColor: LocationColor
 }
 
 export type GeocodingResult = {
@@ -77,6 +79,7 @@ export const FIELD_LABELS: Record<WeatherField, string> = {
 }
 
 export function windDirectionLabel(deg: number): string {
+  if (!isFinite(deg)) return "?"
   const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
   return dirs[((Math.round(deg / 22.5) % 16) + 16) % 16]
 }

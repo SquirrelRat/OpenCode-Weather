@@ -1,8 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 import { type TuiPluginApi, type TuiThemeCurrent } from "@opencode-ai/plugin/tui"
-import { createSignal, Show, For, type Accessor } from "solid-js"
-import type { WeatherData, WeatherConfig, WeatherField, TempUnit, WindUnit, Alignment } from "./config.js"
-import { DEFAULT_ALIGNMENT, DEFAULT_INTERVAL, DEFAULT_FIELDS, DEFAULT_SHOW_HINT, DEFAULT_SHOW_ICONS, DEFAULT_SHOW_LOCATION, DEFAULT_LOCATION_COLOR, weatherEmoji, weatherDescription, isImperialCountry, numOrUndefined, strOrUndefined, windDirectionLabel } from "./config.js"
+import { batch, createSignal, onCleanup, createMemo, Show, For, type Accessor } from "solid-js"
+import type { LocationColor, WeatherData, WeatherConfig, WeatherField, TempUnit, WindUnit, Alignment } from "./config.js"
+import { DEFAULT_ALIGNMENT, DEFAULT_INTERVAL, DEFAULT_FIELDS, DEFAULT_SHOW_HINT, DEFAULT_SHOW_ICONS, DEFAULT_SHOW_LOCATION, DEFAULT_LOCATION_COLOR, LOCATION_COLOR_OPTIONS, weatherEmoji, weatherDescription, isImperialCountry, numOrUndefined, strOrUndefined, windDirectionLabel } from "./config.js"
 import { fetchWeather } from "./weather.js"
 
 const TEMP_UNITS = ["C", "F"] as const
@@ -24,11 +24,12 @@ type WeatherRefreshController = {
 const weatherControllers = new WeakMap<TuiPluginApi, WeatherRefreshController>()
 const pendingRefreshRequests = new WeakSet<TuiPluginApi>()
 const pendingConfigReloadRequests = new WeakSet<TuiPluginApi>()
+const controllerDisposers = new WeakMap<TuiPluginApi, () => void>()
 
 function resolveThemeColor(theme: TuiThemeCurrent, name: string) {
   const valid = ["accent", "info", "warning", "success", "error", "text", "textMuted"] as const
   const key = valid.includes(name as typeof valid[number]) ? (name as typeof valid[number]) : DEFAULT_LOCATION_COLOR as typeof valid[number]
-  return theme[key] ?? theme.text
+  return theme[key] ?? theme.text ?? ""
 }
 
 function readConfig(api: TuiPluginApi): WeatherConfig {
@@ -52,7 +53,7 @@ function readConfig(api: TuiPluginApi): WeatherConfig {
     showHint: api.kv.get<boolean>("weather_show_hint", DEFAULT_SHOW_HINT),
     showIcons: api.kv.get<boolean>("weather_show_icons", DEFAULT_SHOW_ICONS),
     showLocation: api.kv.get<boolean>("weather_show_location", DEFAULT_SHOW_LOCATION),
-    locationColor: api.kv.get<string>("weather_location_color", DEFAULT_LOCATION_COLOR),
+    locationColor: strOrUndefined<LocationColor>(LOCATION_COLOR_OPTIONS.map(o => o.value))(api.kv.get<unknown>("weather_location_color")) ?? DEFAULT_LOCATION_COLOR,
   }
 }
 
@@ -106,8 +107,9 @@ function formatFields(data: WeatherData, config: WeatherConfig): Seg[] {
       if (field === "condition") {
         emit("normal", val)
       } else {
-        segs.push({ kind: "muted", text: (first ? "" : " · ") + def.label + ": " })
+        if (!first) segs.push({ kind: "separator", text: " · " })
         first = false
+        segs.push({ kind: "muted", text: def.label + ": " })
         segs.push({ kind: "normal", text: val })
       }
     }
@@ -135,18 +137,17 @@ function getWeatherController(api: TuiPluginApi): WeatherRefreshController {
   let loadVersion = 0
   let inFlight = false
   let queued = false
-  let pendingRefresh = pendingRefreshRequests.has(api)
-  let pendingConfigReload = pendingConfigReloadRequests.has(api)
-
-  pendingRefreshRequests.delete(api)
-  pendingConfigReloadRequests.delete(api)
+  let fetchAbort: AbortController | undefined
 
   const dispose = () => {
     if (disposed) return
     disposed = true
     if (timer !== undefined) clearInterval(timer)
+    fetchAbort?.abort()
     weatherControllers.delete(api)
   }
+
+  controllerDisposers.set(api, dispose)
 
   const armScheduler = (minutes: number) => {
     if (timer !== undefined) clearInterval(timer)
@@ -156,15 +157,18 @@ function getWeatherController(api: TuiPluginApi): WeatherRefreshController {
 
   const requestConfigReload = () => {
     if (disposed) return
-    const previousInterval = config().interval
-    const nextConfig = readConfig(api)
-    setConfig(nextConfig)
-    pendingConfigReload = false
-    if (nextConfig.interval !== previousInterval) armScheduler(nextConfig.interval)
+    try {
+      const previousInterval = config().interval
+      const nextConfig = readConfig(api)
+      setConfig(nextConfig)
+      if (nextConfig.interval !== previousInterval) armScheduler(nextConfig.interval)
+    } catch (err) {
+      setError(`Config error: ${err instanceof Error ? err.message : String(err)}`)
+    }
   }
 
   const flushSignals = (fn: () => void) => {
-    setTimeout(() => { if (!disposed) fn() }, 0)
+    if (!disposed) batch(fn)
   }
 
   const reload = async () => {
@@ -177,8 +181,17 @@ function getWeatherController(api: TuiPluginApi): WeatherRefreshController {
     const currentVersion = ++loadVersion
     inFlight = true
     setLoading(true)
-    const nextConfig = readConfig(api)
-    setConfig(nextConfig)
+    let nextConfig: WeatherConfig
+    try {
+      nextConfig = readConfig(api)
+      setConfig(nextConfig)
+    } catch (err) {
+      flushSignals(() => {
+        setError(`Config error: ${err instanceof Error ? err.message : String(err)}`)
+        setLoading(false)
+      })
+      return
+    }
 
     try {
       if (nextConfig.lat === undefined || nextConfig.lon === undefined) {
@@ -191,9 +204,13 @@ function getWeatherController(api: TuiPluginApi): WeatherRefreshController {
         return
       }
 
-      setError(null)
-      const weather = await fetchWeather(nextConfig.lat, nextConfig.lon, nextConfig.tempUnit, nextConfig.windUnit)
-      if (disposed || currentVersion !== loadVersion) return
+      fetchAbort?.abort()
+      fetchAbort = new AbortController()
+      const weather = await fetchWeather(nextConfig.lat, nextConfig.lon, nextConfig.tempUnit, nextConfig.windUnit, fetchAbort.signal)
+      if (disposed || currentVersion !== loadVersion) {
+        setLoading(false)
+        return
+      }
 
       const fetchedAt = new Date()
       flushSignals(() => {
@@ -202,10 +219,13 @@ function getWeatherController(api: TuiPluginApi): WeatherRefreshController {
         setError(null)
         setLoading(false)
       })
-    } catch {
-      if (disposed || currentVersion !== loadVersion) return
+    } catch (err) {
+      if (disposed || currentVersion !== loadVersion) {
+        setLoading(false)
+        return
+      }
       flushSignals(() => {
-        setError("Weather unavailable")
+        setError(`Weather unavailable${err instanceof Error ? `: ${err.message}` : ""}`)
         setData(null)
         setLastUpdated(null)
         setLoading(false)
@@ -221,7 +241,6 @@ function getWeatherController(api: TuiPluginApi): WeatherRefreshController {
 
   const requestRefresh = () => {
     if (disposed) return
-    pendingRefresh = false
     void reload()
   }
 
@@ -235,14 +254,25 @@ function getWeatherController(api: TuiPluginApi): WeatherRefreshController {
     requestConfigReload,
   }
 
+  if (api.lifecycle.signal.aborted) {
+    dispose()
+    return controller
+  }
+
   weatherControllers.set(api, controller)
   api.lifecycle.signal.addEventListener("abort", dispose, { once: true })
 
   armScheduler(config().interval)
   void reload()
 
-  if (pendingConfigReload) requestConfigReload()
-  if (pendingRefresh) requestRefresh()
+  if (pendingRefreshRequests.has(api)) {
+    pendingRefreshRequests.delete(api)
+    requestRefresh()
+  }
+  if (pendingConfigReloadRequests.has(api)) {
+    pendingConfigReloadRequests.delete(api)
+    requestConfigReload()
+  }
 
   return controller
 }
@@ -270,6 +300,14 @@ export function WeatherWidget(props: { api: TuiPluginApi }) {
   const theme = () => props.api.theme.current
   const hasLocation = () => controller.config().lat !== undefined && controller.config().lon !== undefined
   const showHint = () => controller.config().showHint
+  const segments = createMemo(() =>
+    controller.data() && controller.config()
+      ? formatFields(controller.data()!, controller.config())
+      : []
+  )
+  onCleanup(() => {
+    controllerDisposers.get(props.api)?.()
+  })
 
   return (
     <box flexDirection="row" flexGrow={1} paddingRight={2}>
@@ -306,12 +344,12 @@ export function WeatherWidget(props: { api: TuiPluginApi }) {
                 fg={theme().textMuted}
                 onMouseDown={() => props.api.keymap.dispatchCommand("weather.refresh")}
               >
-                {controller.error() ?? "Loading..."}
+                {controller.error() ?? (controller.loading() ? "Loading..." : "")}
               </text>
             }
           >
             {(w) => (
-              <For each={formatFields(w(), controller.config())}>
+              <For each={segments()}>
                 {(seg) => {
                   const fg = seg.kind === "separator"
                     ? theme().info

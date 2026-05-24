@@ -7,6 +7,8 @@ import { DEFAULT_ALIGNMENT, DEFAULT_INTERVAL, DEFAULT_FIELDS, DEFAULT_SHOW_HINT,
 type SettingsTempUnit = TempUnit | "auto"
 type SettingsWindUnit = WindUnit | "auto"
 
+let geocodeInFlight = false
+
 function refresh(api: TuiPluginApi) {
   api.keymap.dispatchCommand("weather.refresh")
 }
@@ -25,54 +27,68 @@ export function showLocationPicker(api: TuiPluginApi) {
         onConfirm={async (value: string) => {
           const q = value.trim()
           if (!q) return
-
-          api.ui.dialog.replace(() => (
-            <box padding={1}>
-              <text>Searching locations...</text>
-            </box>
-          ))
-
+          if (geocodeInFlight) return
+          geocodeInFlight = true
           try {
-            const results = await searchLocation(q)
-            if (results.length === 0) {
+            try {
               api.ui.dialog.replace(() => (
-                <box padding={1} gap={1}>
-                  <text>No locations found for "{q}"</text>
-                  <text onMouseDown={() => showLocationPicker(api)}>
-                    ← Try again
-                  </text>
+                <box padding={1}>
+                  <text>Searching locations...</text>
                 </box>
               ))
-              return
-            }
+            } catch { return }
 
-            api.ui.dialog.replace(() => (
-              <api.ui.DialogSelect
-                title="Select a location"
-                options={results.map((r: GeocodingResult) => ({
-                  title: r.name + (r.admin1 ? `, ${r.admin1}` : ""),
-                  description: r.country,
-                  value: r,
-                  onSelect: () => {
-                    api.kv.set("weather_lat", r.latitude)
-                    api.kv.set("weather_lon", r.longitude)
-                    api.kv.set("weather_city", r.name)
-                    api.kv.set("weather_country_code", r.country_code)
-                    refresh(api)
-                    api.ui.dialog.clear()
-                  },
-                }))}
-              />
-            ))
-          } catch {
-            api.ui.dialog.replace(() => (
-              <box padding={1} gap={1}>
-                <text>Search failed. Check connection.</text>
-                <text onMouseDown={() => showLocationPicker(api)}>
-                  ← Try again
-                </text>
-              </box>
-            ))
+            try {
+              const results = await searchLocation(q)
+              if (results.length === 0) {
+                try {
+                  api.ui.dialog.replace(() => (
+                    <box padding={1} gap={1}>
+                      <text>No locations found for "{q}"</text>
+                      <text onMouseDown={() => showLocationPicker(api)}>
+                        ← Try again
+                      </text>
+                    </box>
+                  ))
+                } catch {}
+                return
+              }
+
+              try {
+                api.ui.dialog.replace(() => (
+                  <api.ui.DialogSelect
+                    title="Select a location"
+                    options={results.map((r: GeocodingResult) => ({
+                      title: r.name + (r.admin1 ? `, ${r.admin1}` : ""),
+                      description: r.country,
+                      value: r,
+                      onSelect: () => {
+                        api.kv.set("weather_lat", r.latitude)
+                        api.kv.set("weather_lon", r.longitude)
+                        api.kv.set("weather_city", r.name)
+                        api.kv.set("weather_country_code", r.country_code)
+                        configReload(api)
+                        refresh(api)
+                        api.ui.dialog.clear()
+                      },
+                    }))}
+                  />
+                ))
+              } catch {}
+            } catch {
+              try {
+                api.ui.dialog.replace(() => (
+                  <box padding={1} gap={1}>
+                    <text>Search failed. Check connection.</text>
+                    <text onMouseDown={() => showLocationPicker(api)}>
+                      ← Try again
+                    </text>
+                  </box>
+                ))
+              } catch {}
+            }
+          } finally {
+            geocodeInFlight = false
           }
         }}
       />
@@ -97,6 +113,7 @@ function showFieldPicker(api: TuiPluginApi) {
             const updated = current.includes(f)
               ? current.filter((x) => x !== f)
               : [...current, f]
+            if (updated.length === 0) return
             api.kv.set("weather_fields", updated)
             configReload(api)
             showFieldPicker(api)
@@ -155,9 +172,11 @@ function showIntervalPicker(api: TuiPluginApi) {
         placeholder="5"
         onCancel={() => showWeatherSettings(api)}
         onConfirm={(value: string) => {
-          const n = parseInt(value, 10)
-          if (isNaN(n) || n < 1) return
-          api.kv.set("weather_interval", n)
+          const n = Number(value)
+          if (!Number.isFinite(n) || n < 1) return
+          const clamped = Math.min(Math.floor(n), 1440)
+          if (clamped < 1) return
+          api.kv.set("weather_interval", clamped)
           configReload(api)
           refresh(api)
           showWeatherSettings(api)
@@ -297,7 +316,14 @@ export function showWeatherSettings(api: TuiPluginApi) {
               "weather_alignment", "weather_fields", "weather_show_hint",
               "weather_show_icons", "weather_show_location", "weather_location_color",
             ]
-            for (const k of keys) api.kv.set(k, undefined)
+            for (const k of keys) {
+              if ("delete" in api.kv && typeof (api.kv as any).delete === "function") {
+                ;(api.kv as any).delete(k)
+              } else {
+                api.kv.set(k, undefined)
+              }
+            }
+            configReload(api)
             refresh(api)
             showWeatherSettings(api)
           },
